@@ -26,6 +26,9 @@ sealed interface ShopEffect {
     /** Builds a shop-only ride at level 1. */
     data class UnlockRide(val rideId: String) : ShopEffect
 
+    /** Rides never break down. */
+    data object NoBreakdowns : ShopEffect
+
     /** No gameplay effect; owned for looks. */
     data object Cosmetic : ShopEffect
 }
@@ -51,6 +54,7 @@ object Catalog {
     val shop: List<ShopItem> = listOf(
         ShopItem("time_warp_1h", "Time Warp 1h", 40, ShopEffect.TimeWarp(3_600), repeatable = true),
         ShopItem("fountain", "Fountain Decor", 60, ShopEffect.Cosmetic),
+        ShopItem("mechanic", "Park Mechanic", 120, ShopEffect.NoBreakdowns),
         ShopItem("vip_manager", "VIP Manager", 150, ShopEffect.RideMultiplier("ferris_wheel", 3.0)),
         ShopItem("golden_coaster", "Golden Coaster", 300, ShopEffect.UnlockRide("golden_coaster")),
         ShopItem("double_income", "Double Income Forever", 600, ShopEffect.GlobalMultiplier(2.0)),

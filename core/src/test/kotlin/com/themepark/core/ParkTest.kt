@@ -7,17 +7,25 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class ParkTest {
-    private val t0 = 1_800_000_000_000L
+    private fun firstDay(weather: Weather): Long = generateSequence(20_000L) { it + 1 }.first { Weather.on(it) == weather }
+
+    // One hour into a sunny day, so weather does not change any numbers and 8h stays in the day.
+    private val t0 = firstDay(Weather.SUNNY) * Rules.DAY_MS + Rules.HOUR_MS
     private val second = 1_000L
     private val eps = 1e-6
 
+    /** By default the mechanic is owned, so breakdowns do not change any numbers either. */
     private fun state(
         coins: Double = 0.0,
         gems: Int = 0,
         levels: Map<String, Int> = mapOf("snack_stand" to 1),
         boostUntil: Long = 0,
-        owned: Set<String> = emptySet(),
-    ) = ParkState(coins, gems, levels, lastCollectedAt = t0, boostUntil = boostUntil, ownedItems = owned)
+        owned: Set<String> = setOf("mechanic"),
+        fixedAt: Map<String, Long> = levels.keys.associateWith { t0 },
+        collectedAt: Long = t0,
+    ) = ParkState(
+        coins, gems, levels, lastCollectedAt = collectedAt, boostUntil = boostUntil, ownedItems = owned, lastFixedAt = fixedAt,
+    )
 
     private fun ok(outcome: Outcome): ParkState = assertIs<Outcome.Ok>(outcome).state
 
@@ -194,6 +202,81 @@ class ParkTest {
     fun `display order never offers the shop-only ride as the next to build`() {
         val buildable = Catalog.rides.filter { !it.shopOnly }.associate { it.id to 1 }
         assertTrue(Park.displayOrder(state(levels = buildable)).none { it.shopOnly })
+    }
+
+    @Test
+    fun `weather is the same for the same day and every kind happens`() {
+        assertEquals(Weather.on(20_123), Weather.on(20_123))
+        val seen = (20_000L until 20_400L).map { Weather.on(it) }.toSet()
+        assertEquals(Weather.entries.toSet(), seen)
+    }
+
+    @Test
+    fun `rain closes the coaster and fills the carousel`() {
+        val rainy = firstDay(Weather.RAINY) * Rules.DAY_MS + Rules.HOUR_MS
+        val s = state(levels = mapOf("carousel" to 1, "roller_coaster" to 1), collectedAt = rainy, fixedAt = mapOf("carousel" to rainy, "roller_coaster" to rainy))
+        assertEquals(4.0 * 1.5, Park.incomeAt(s, rainy), eps)
+    }
+
+    @Test
+    fun `pending pays each day at that day's weather`() {
+        // Find a sunny day followed by a hot one; snack stand earns 1/s then 2/s.
+        val day = generateSequence(20_000L) { it + 1 }.first { Weather.on(it) == Weather.SUNNY && Weather.on(it + 1) == Weather.HOT }
+        val midnight = (day + 1) * Rules.DAY_MS
+        val start = midnight - 100 * second
+        val s = state(collectedAt = start)
+        assertEquals(100.0 + 2 * 50.0, Park.pending(s, midnight + 50 * second), eps)
+    }
+
+    @Test
+    fun `a ride breaks down between 3 and 6 hours after it was fixed and then earns nothing`() {
+        val s = state(owned = emptySet())
+        val breaksAt = Park.breaksAt(s, "snack_stand")!!
+        assertTrue(breaksAt - t0 in Rules.BREAKDOWN_MIN_MS until Rules.BREAKDOWN_MIN_MS + Rules.BREAKDOWN_SPREAD_MS)
+        assertTrue(!Park.isBroken(s, "snack_stand", breaksAt - 1))
+        assertTrue(Park.isBroken(s, "snack_stand", breaksAt))
+        val earned = (breaksAt - t0) / 1000.0
+        assertEquals(earned, Park.pending(s, t0 + Rules.OFFLINE_CAP_MS), eps)
+    }
+
+    @Test
+    fun `fixing a broken ride pays what it earned and starts it again`() {
+        val s = state(owned = emptySet())
+        val later = Park.breaksAt(s, "snack_stand")!! + Rules.HOUR_MS
+        assertIs<Outcome.Refused>(Park.fix(s, "snack_stand", t0))
+        val fixed = ok(Park.fix(s, "snack_stand", later))
+        assertEquals((later - Rules.HOUR_MS - t0) / 1000.0, fixed.coins, eps)
+        assertTrue(!Park.isBroken(fixed, "snack_stand", later))
+        assertEquals(60.0, Park.pending(fixed, later + 60 * second), eps)
+    }
+
+    @Test
+    fun `fix all repairs every broken ride`() {
+        val levels = mapOf("snack_stand" to 1, "carousel" to 1)
+        val s = state(levels = levels, owned = emptySet(), fixedAt = emptyMap())
+        assertEquals(2, Park.brokenRides(s, t0).size)
+        val fixed = ok(Park.fixAll(s, t0))
+        assertTrue(Park.brokenRides(fixed, t0).isEmpty())
+        assertIs<Outcome.Refused>(Park.fixAll(fixed, t0))
+    }
+
+    @Test
+    fun `a built ride with no fix time counts as broken, as in saves from before breakdowns`() {
+        assertTrue(Park.isBroken(state(owned = emptySet(), fixedAt = emptyMap()), "snack_stand", t0))
+    }
+
+    @Test
+    fun `the mechanic stops breakdowns`() {
+        val s = state(owned = setOf("mechanic"), fixedAt = emptyMap())
+        assertTrue(!Park.isBroken(s, "snack_stand", t0 + Rules.DAY_MS))
+        assertEquals(null, Park.breaksAt(s, "snack_stand"))
+    }
+
+    @Test
+    fun `building a ride starts its breakdown clock`() {
+        val s = ok(Park.upgrade(state(coins = 1_000.0, owned = emptySet()), "carousel", t0))
+        assertEquals(t0, s.lastFixedAt["carousel"])
+        assertTrue(!Park.isBroken(s, "carousel", t0))
     }
 
     @Test

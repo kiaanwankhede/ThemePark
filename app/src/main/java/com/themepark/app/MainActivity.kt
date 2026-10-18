@@ -81,6 +81,8 @@ private fun Game() {
             boost = { act(Park::startBoost) },
             claimDaily = { act(Park::claimDailyVisit) },
             upgrade = { id -> act { s, t -> Park.upgrade(s, id, t) } },
+            fix = { id -> act { s, t -> Park.fix(s, id, t) } },
+            fixAll = { act(Park::fixAll) },
             buy = { id -> act { s, t -> Park.buy(s, id, t) } },
         ),
     )

@@ -47,6 +47,7 @@ import com.themepark.core.Park
 import com.themepark.core.ParkState
 import com.themepark.core.RideDef
 import com.themepark.core.ShopItem
+import com.themepark.core.Weather
 import kotlinx.coroutines.delay
 
 enum class Tab { Park, Shop }
@@ -57,6 +58,8 @@ class ParkActions(
     val boost: () -> Unit,
     val claimDaily: () -> Unit,
     val upgrade: (rideId: String) -> Unit,
+    val fix: (rideId: String) -> Unit,
+    val fixAll: () -> Unit,
     val buy: (itemId: String) -> Unit,
 )
 
@@ -118,9 +121,16 @@ private fun ParkTab(state: ParkState, now: Long, message: String?, actions: Park
                     )
                 }
             }
+            item { WeatherCard(now) }
+            val broken = Park.brokenRides(state, now)
+            if (broken.size >= 2) {
+                item {
+                    BigButton("Fix all ${broken.size} broken rides", Palette.RedDark, Palette.OnDark, Modifier.fillMaxWidth(), onClick = actions.fixAll)
+                }
+            }
             message?.let { item { MessageLine(it) } }
             items(Park.displayOrder(state), key = { it.id }) { ride ->
-                RideCard(state, ride, pending, onUpgrade = { actions.upgrade(ride.id) })
+                RideCard(state, ride, now, pending, onUpgrade = { actions.upgrade(ride.id) }, onFix = { actions.fix(ride.id) })
             }
             item {
                 BigButton("Claim daily visit · +10 gems", Palette.Card, Palette.Ink, Modifier.fillMaxWidth(), onClick = actions.claimDaily)
@@ -129,9 +139,27 @@ private fun ParkTab(state: ParkState, now: Long, message: String?, actions: Park
     }
 }
 
+/** Today's weather and tomorrow's, so the player can plan which rides to push. */
 @Composable
-private fun RideCard(state: ParkState, ride: RideDef, pending: Double, onUpgrade: () -> Unit) {
+private fun WeatherCard(now: Long) {
+    val today = Weather.at(now)
+    val tomorrow = Weather.on(Weather.dayOf(now) + 1)
+    Column(
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Palette.Card).padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text("Today: ${today.label}", color = Palette.Ink, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+        Text(today.effect, color = Palette.InkMuted, fontSize = 14.sp)
+        Text("Tomorrow: ${tomorrow.label} · ${tomorrow.effect}", color = Palette.InkMuted, fontSize = 13.sp)
+    }
+}
+
+@Composable
+private fun RideCard(state: ParkState, ride: RideDef, now: Long, pending: Double, onUpgrade: () -> Unit, onFix: () -> Unit) {
     val level = state.level(ride.id)
+    val broken = Park.isBroken(state, ride.id, now)
+    val weather = Weather.at(now)
+    val factor = weather.factor(ride.id)
     val cost = Park.upgradeCost(ride, level)
     // Upgrading collects first, so pending coins count toward the cost.
     val affordable = state.coins + pending >= cost
@@ -152,6 +180,17 @@ private fun RideCard(state: ParkState, ride: RideDef, pending: Double, onUpgrade
                 color = Palette.InkMuted,
                 fontSize = 13.sp,
             )
+            if (level > 0) {
+                when {
+                    broken -> Text("Broken down · not earning", color = Palette.RedDark, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    factor == 0.0 -> Text("Closed today (${weather.label})", color = Palette.RedDark, fontSize = 13.sp)
+                    factor > 1.0 -> Text("Busy today · ×${formatFactor(factor)}", color = Palette.ParkGreen, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    factor < 1.0 -> Text("Slow today · ×${formatFactor(factor)}", color = Palette.InkMuted, fontSize = 13.sp)
+                }
+            }
+            if (broken) {
+                BigButton("Fix", Palette.RedDark, Palette.OnDark, Modifier.fillMaxWidth(), onClick = onFix)
+            }
             nextArtLevel(level)?.takeIf { level > 0 }?.let { next ->
                 NewLookProgress(level, next)
             }
@@ -164,6 +203,9 @@ private fun RideCard(state: ParkState, ride: RideDef, pending: Double, onUpgrade
         }
     }
 }
+
+private fun formatFactor(factor: Double): String =
+    if (factor == factor.toLong().toDouble()) factor.toLong().toString() else factor.toString()
 
 /** Progress towards the level where the ride's picture next changes. */
 @Composable

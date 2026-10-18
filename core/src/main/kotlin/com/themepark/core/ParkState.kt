@@ -22,6 +22,11 @@ data class ParkState(
     val ownedItems: Set<String> = emptySet(),
     /** UTC day number (epoch days) of the last daily-visit gem claim; -1 if never. */
     val lastDailyClaimDay: Long = -1,
+    /**
+     * Ride id to when it was last built or fixed. A ride breaks down a few hours after that
+     * (see [Park.breaksAt]); a built ride missing here counts as broken.
+     */
+    val lastFixedAt: Map<String, Long> = emptyMap(),
 ) {
     fun level(rideId: String): Int = rideLevels[rideId] ?: 0
 
@@ -31,6 +36,7 @@ data class ParkState(
             gems = 0,
             rideLevels = mapOf("snack_stand" to 1),
             lastCollectedAt = now,
+            lastFixedAt = mapOf("snack_stand" to now),
         )
     }
 }
@@ -50,6 +56,10 @@ object Rules {
     const val MILESTONE_GEMS = 25
 
     const val DAILY_VISIT_GEMS = 10
+
+    /** A ride runs this long, plus up to [BREAKDOWN_SPREAD_MS] more, before it breaks down. */
+    const val BREAKDOWN_MIN_MS = 3 * HOUR_MS
+    const val BREAKDOWN_SPREAD_MS = 3 * HOUR_MS
 
     /** Membership boost: no ad needed, but it still runs for a fixed time and stacks only so far. */
     const val BOOST_FACTOR = 2.0

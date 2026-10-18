@@ -47,20 +47,63 @@ object Park {
         return total
     }
 
-    /** Income per second right now, including the boost if it is running. */
-    fun incomeAt(state: ParkState, now: Long): Double =
-        baseIncome(state) * if (now < state.boostUntil) Rules.BOOST_FACTOR else 1.0
+    /** Whether the player owns a shop item with this effect type. */
+    private inline fun <reified T : ShopEffect> owns(state: ParkState): Boolean =
+        state.ownedItems.any { Catalog.shopItem(it).effect is T }
 
-    /** Coins waiting to be collected. Stops growing [Rules.OFFLINE_CAP_MS] after the last collect. */
+    /**
+     * When a built ride breaks down, or null if it never will (mechanic owned, not built, or
+     * already counted as broken because it has no fix time).
+     */
+    fun breaksAt(state: ParkState, rideId: String): Long? {
+        if (state.level(rideId) <= 0 || owns<ShopEffect.NoBreakdowns>(state)) return null
+        val fixedAt = state.lastFixedAt[rideId] ?: return null
+        val spread = Math.floorMod(mix(rideId.hashCode() * 31L + fixedAt), Rules.BREAKDOWN_SPREAD_MS)
+        return fixedAt + Rules.BREAKDOWN_MIN_MS + spread
+    }
+
+    fun isBroken(state: ParkState, rideId: String, time: Long): Boolean {
+        if (state.level(rideId) <= 0 || owns<ShopEffect.NoBreakdowns>(state)) return false
+        val breaksAt = breaksAt(state, rideId) ?: return true
+        return time >= breaksAt
+    }
+
+    fun brokenRides(state: ParkState, now: Long): List<RideDef> =
+        Catalog.rides.filter { isBroken(state, it.id, now) }
+
+    /** Income per second at this moment: weather, breakdowns and the boost included. */
+    fun incomeAt(state: ParkState, time: Long): Double {
+        val weather = Weather.at(time)
+        var total = Catalog.rides.sumOf { ride ->
+            if (isBroken(state, ride.id, time)) 0.0 else rideIncome(state, ride) * weather.factor(ride.id)
+        }
+        for (id in state.ownedItems) {
+            val effect = Catalog.shopItem(id).effect
+            if (effect is ShopEffect.GlobalMultiplier) total *= effect.factor
+        }
+        return total * if (time < state.boostUntil) Rules.BOOST_FACTOR else 1.0
+    }
+
+    /**
+     * Coins waiting to be collected. Stops growing [Rules.OFFLINE_CAP_MS] after the last collect.
+     * Income only changes at a new day (weather), the end of the boost or a breakdown, so the
+     * window is split at those moments and each piece is paid at its own steady rate.
+     */
     fun pending(state: ParkState, now: Long): Double {
         val start = state.lastCollectedAt
         val end = min(now, start + Rules.OFFLINE_CAP_MS)
         if (end <= start) return 0.0
-        val boostedMs = max(0L, min(end, state.boostUntil) - start)
-        val boostedSeconds = boostedMs / 1000.0
-        val totalSeconds = (end - start) / 1000.0
-        val base = baseIncome(state)
-        return base * totalSeconds + base * (Rules.BOOST_FACTOR - 1.0) * boostedSeconds
+        val cuts = sortedSetOf(start, end)
+        var day = (Weather.dayOf(start) + 1) * Rules.DAY_MS
+        while (day < end) {
+            cuts += day
+            day += Rules.DAY_MS
+        }
+        if (state.boostUntil in (start + 1) until end) cuts += state.boostUntil
+        for (ride in Catalog.rides) {
+            breaksAt(state, ride.id)?.takeIf { it in (start + 1) until end }?.let { cuts += it }
+        }
+        return cuts.zipWithNext().sumOf { (from, to) -> incomeAt(state, from) * (to - from) / 1000.0 }
     }
 
     fun collect(state: ParkState, now: Long): ParkState =
@@ -84,6 +127,7 @@ object Park {
                 coins = settled.coins - cost,
                 gems = settled.gems + milestoneGems,
                 rideLevels = settled.rideLevels + (rideId to newLevel),
+                lastFixedAt = if (level == 0) settled.lastFixedAt + (rideId to now) else settled.lastFixedAt,
             ),
         )
     }
@@ -95,6 +139,21 @@ object Park {
         val settled = collect(state, now)
         val until = min(from + Rules.BOOST_DURATION_MS, now + Rules.BOOST_MAX_STACK_MS)
         return Outcome.Ok(settled.copy(boostUntil = until))
+    }
+
+    /** Repairs a broken ride. Collects first, so earnings before the repair are paid. */
+    fun fix(state: ParkState, rideId: String, now: Long): Outcome {
+        val ride = Catalog.ride(rideId)
+        if (!isBroken(state, rideId, now)) return Outcome.Refused("${ride.name} is running fine")
+        val settled = collect(state, now)
+        return Outcome.Ok(settled.copy(lastFixedAt = settled.lastFixedAt + (rideId to now)))
+    }
+
+    fun fixAll(state: ParkState, now: Long): Outcome {
+        val broken = brokenRides(state, now)
+        if (broken.isEmpty()) return Outcome.Refused("Every ride is running")
+        val settled = collect(state, now)
+        return Outcome.Ok(settled.copy(lastFixedAt = settled.lastFixedAt + broken.map { it.id to now }))
     }
 
     fun claimDailyVisit(state: ParkState, now: Long): Outcome {
@@ -115,8 +174,11 @@ object Park {
         )
         val result = when (val effect = item.effect) {
             is ShopEffect.TimeWarp -> paid.copy(coins = paid.coins + incomeAt(paid, now) * effect.seconds)
-            is ShopEffect.UnlockRide -> paid.copy(rideLevels = paid.rideLevels + (effect.rideId to max(1, paid.level(effect.rideId))))
-            is ShopEffect.RideMultiplier, is ShopEffect.GlobalMultiplier, ShopEffect.Cosmetic -> paid
+            is ShopEffect.UnlockRide -> paid.copy(
+                rideLevels = paid.rideLevels + (effect.rideId to max(1, paid.level(effect.rideId))),
+                lastFixedAt = paid.lastFixedAt + (effect.rideId to now),
+            )
+            is ShopEffect.RideMultiplier, is ShopEffect.GlobalMultiplier, ShopEffect.NoBreakdowns, ShopEffect.Cosmetic -> paid
         }
         return Outcome.Ok(result)
     }

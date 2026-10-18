@@ -36,6 +36,7 @@ import com.themepark.app.formatAmount
 import com.themepark.core.Outcome
 import com.themepark.core.Park
 import com.themepark.core.ParkState
+import com.themepark.core.Weather
 
 /**
  * Home-screen widget: collect earnings and buy the cheapest upgrade without opening the game.
@@ -85,6 +86,16 @@ private fun WidgetContent(state: ParkState, now: Long) {
     ) {
         Text("Sunny Hills Park", style = TextStyle(fontWeight = FontWeight.Bold, fontSize = 16.sp))
         Text("Coins ${formatAmount(state.coins)} · +${formatAmount(Park.incomeAt(state, now))}/s")
+        val weather = Weather.at(now)
+        Text("Today: ${weather.label} · ${weather.effect}", style = TextStyle(fontSize = 12.sp))
+        val broken = Park.brokenRides(state, now)
+        if (broken.isNotEmpty()) {
+            Spacer(modifier = GlanceModifier.height(6.dp))
+            Button(
+                text = if (broken.size == 1) "Fix ${broken.first().name}" else "Fix ${broken.size} broken rides",
+                onClick = actionRunCallback<FixAllAction>(),
+            )
+        }
         Spacer(modifier = GlanceModifier.height(6.dp))
         Row {
             Button(
@@ -107,6 +118,13 @@ private fun WidgetContent(state: ParkState, now: Long) {
 class CollectAction : ActionCallback {
     override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
         SaveStore.get(context).act { Outcome.Ok(Park.collect(it, System.currentTimeMillis())) }
+        refreshParkWidget(context, glanceId)
+    }
+}
+
+class FixAllAction : ActionCallback {
+    override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
+        SaveStore.get(context).act { Park.fixAll(it, System.currentTimeMillis()) }
         refreshParkWidget(context, glanceId)
     }
 }

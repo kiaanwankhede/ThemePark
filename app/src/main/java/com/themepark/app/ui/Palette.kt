@@ -16,6 +16,8 @@ object Palette {
     val PurpleDeep = Color(0xFF5A2FC2)
     val ShopBackground = Color(0xFFF4F1FB)
     val Red = Color(0xFFE2574C)
+    /** Red dark enough for small text on white. */
+    val RedDark = Color(0xFFB3261E)
     val Wood = Color(0xFF8A5A3B)
     val Ink = Color(0xFF1E2633)
     val InkMuted = Color(0xFF4A5565)
