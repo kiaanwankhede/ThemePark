@@ -48,31 +48,31 @@ data class ShopItem(
 
 object Catalog {
     /**
-     * Rides are unlocked in this order. Ride n costs [RIDE_COST_STEP]^n times the first and
-     * earns [RIDE_INCOME_STEP]^n times as much, so each new ride is a big jump that takes a few
-     * days to reach. Tuned with a simulation of four check-ins a day: a new ride every 2–3 days
-     * and the whole park maxed in about 6–7 weeks (see BalanceTest).
+     * Rides are unlocked in this order; 3,700 levels in all. Ride n costs [RIDE_COST_STEP]^n
+     * times the first and earns [RIDE_INCOME_STEP]^n times as much. Tuned so an upgrade costs
+     * about a second of income at the start, tens of seconds mid-game and minutes near the end,
+     * with the six first rides open within the first hour (see BalanceTest).
      */
     val rides: List<RideDef> = listOf(
-        ride(0, "snack_stand", "Snack Stand", maxLevel = 100),
-        ride(1, "carousel", "Carousel", maxLevel = 100),
-        ride(2, "bumper_cars", "Bumper Cars", maxLevel = 125),
-        ride(3, "teacups", "Spinning Teacups", maxLevel = 125),
-        ride(4, "ferris_wheel", "Ferris Wheel", maxLevel = 150),
-        ride(5, "pirate_ship", "Pirate Ship", maxLevel = 150),
-        ride(6, "log_flume", "Log Flume", maxLevel = 175),
-        ride(7, "haunted_house", "Haunted House", maxLevel = 175),
-        ride(8, "drop_tower", "Drop Tower", maxLevel = 200),
-        ride(9, "roller_coaster", "Roller Coaster", maxLevel = 200),
-        ride(10, "splash_zone", "Splash Zone", maxLevel = 225),
-        ride(11, "mega_coaster", "Mega Coaster", maxLevel = 250),
+        ride(0, "snack_stand", "Snack Stand", maxLevel = 200),
+        ride(1, "carousel", "Carousel", maxLevel = 250),
+        ride(2, "bumper_cars", "Bumper Cars", maxLevel = 250),
+        ride(3, "teacups", "Spinning Teacups", maxLevel = 300),
+        ride(4, "ferris_wheel", "Ferris Wheel", maxLevel = 300),
+        ride(5, "pirate_ship", "Pirate Ship", maxLevel = 300),
+        ride(6, "log_flume", "Log Flume", maxLevel = 325),
+        ride(7, "haunted_house", "Haunted House", maxLevel = 325),
+        ride(8, "drop_tower", "Drop Tower", maxLevel = 350),
+        ride(9, "roller_coaster", "Roller Coaster", maxLevel = 350),
+        ride(10, "splash_zone", "Splash Zone", maxLevel = 375),
+        ride(11, "mega_coaster", "Mega Coaster", maxLevel = 375),
         // Bought with gems; earns like the 7th ride, a big lift whenever it is bought.
-        ride(6, "golden_coaster", "Golden Coaster", maxLevel = 100, shopOnly = true),
+        ride(6, "golden_coaster", "Golden Coaster", maxLevel = 200, shopOnly = true),
     )
 
-    private const val FIRST_RIDE_COST = 20_000.0
-    private const val RIDE_COST_STEP = 30.0
-    private const val RIDE_INCOME_STEP = 20.0
+    private const val FIRST_RIDE_COST = 100.0
+    private const val RIDE_COST_STEP = 300.0
+    private const val RIDE_INCOME_STEP = 120.0
 
     private fun ride(index: Int, id: String, name: String, maxLevel: Int, shopOnly: Boolean = false) = RideDef(
         id = id,

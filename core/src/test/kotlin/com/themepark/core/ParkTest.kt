@@ -31,32 +31,33 @@ class ParkTest {
     private fun ok(outcome: Outcome): ParkState = assertIs<Outcome.Ok>(outcome).state
 
     @Test
-    fun `upgrade cost grows 6,5 percent per level`() {
+    fun `upgrade cost grows 3,2 percent per level`() {
         val ride = Catalog.ride("carousel")
-        assertEquals(600_000.0, Park.upgradeCost(ride, 0), eps)
-        assertEquals(639_000.0, Park.upgradeCost(ride, 1), 1e-3)
-        assertEquals(600_000.0 * 1.065 * 1.065, Park.upgradeCost(ride, 2), 1e-3)
+        assertEquals(30_000.0, Park.upgradeCost(ride, 0), eps)
+        assertEquals(30_960.0, Park.upgradeCost(ride, 1), 1e-6)
+        assertEquals(30_000.0 * 1.032 * 1.032, Park.upgradeCost(ride, 2), 1e-6)
     }
 
     @Test
-    fun `each ride costs 30 times and earns 20 times the one before`() {
+    fun `each ride costs 300 times and earns 120 times the one before`() {
         val (first, second) = Catalog.rides.take(2)
-        assertEquals(30.0, second.baseCost / first.baseCost, eps)
-        assertEquals(20.0, second.baseIncomePerSec / first.baseIncomePerSec, eps)
+        assertEquals(300.0, second.baseCost / first.baseCost, eps)
+        assertEquals(120.0, second.baseIncomePerSec / first.baseIncomePerSec, eps)
         assertEquals(12, Catalog.rides.count { !it.shopOnly })
+        assertEquals(3_700, Catalog.rides.filter { !it.shopOnly }.sumOf { it.maxLevel })
     }
 
     @Test
-    fun `income multiplies by 5 at every 25th level`() {
+    fun `income multiplies by 2,5 at every 25th level`() {
         val ride = Catalog.ride("snack_stand")
         assertEquals(24.0, Park.rideIncome(state(levels = mapOf("snack_stand" to 24)), ride), eps)
-        assertEquals(125.0, Park.rideIncome(state(levels = mapOf("snack_stand" to 25)), ride), eps)
-        assertEquals(1_250.0, Park.rideIncome(state(levels = mapOf("snack_stand" to 50)), ride), eps)
+        assertEquals(62.5, Park.rideIncome(state(levels = mapOf("snack_stand" to 25)), ride), eps)
+        assertEquals(312.5, Park.rideIncome(state(levels = mapOf("snack_stand" to 50)), ride), eps)
     }
 
     @Test
     fun `a ride at its top level cannot be upgraded`() {
-        val s = state(coins = 1e300, levels = mapOf("snack_stand" to 100))
+        val s = state(coins = 1e300, levels = mapOf("snack_stand" to 200))
         assertIs<Outcome.Refused>(Park.upgrade(s, "snack_stand", t0))
         assertTrue(Park.isMaxed(s, Catalog.ride("snack_stand")))
     }
@@ -99,9 +100,9 @@ class ParkTest {
     @Test
     fun `upgrade settles earnings at the old rate before paying`() {
         val now = t0 + 100 * second
-        val s = ok(Park.upgrade(state(coins = 21_300.0), "snack_stand", now))
-        // Earned 100 at level 1, paid 20,000 * 1.065 for level 2.
-        assertEquals(100.0, s.coins, 1e-6)
+        val s = ok(Park.upgrade(state(coins = 3.2), "snack_stand", now))
+        // Earned 100 at level 1, paid 100 * 1.032 for level 2.
+        assertEquals(0.0, s.coins, 1e-9)
         assertEquals(2, s.level("snack_stand"))
         assertEquals(now, s.lastCollectedAt)
     }
@@ -109,7 +110,7 @@ class ParkTest {
     @Test
     fun `upgrade without enough coins is refused and says how much is missing`() {
         val outcome = Park.upgrade(state(coins = 100.0), "carousel", t0)
-        assertEquals(599_900.0, assertIs<Outcome.NotEnoughCoins>(outcome).needed, 1e-6)
+        assertEquals(29_900.0, assertIs<Outcome.NotEnoughCoins>(outcome).needed, 1e-6)
     }
 
     @Test
@@ -178,20 +179,20 @@ class ParkTest {
     fun `golden coaster unlock builds the ride`() {
         val s = ok(Park.buy(state(gems = 300), "golden_coaster", t0))
         assertEquals(1, s.level("golden_coaster"))
-        assertEquals(1.0 + 20.0.pow(6), Park.baseIncome(s), eps)
+        assertEquals(1.0 + 120.0.pow(6), Park.baseIncome(s), 1e-3)
     }
 
     @Test
     fun `vip manager triples only the ferris wheel`() {
         val s = state(levels = mapOf("snack_stand" to 1, "ferris_wheel" to 1), owned = setOf("vip_manager"))
-        assertEquals(3 * 20.0.pow(4), Park.rideIncome(s, Catalog.ride("ferris_wheel")), eps)
+        assertEquals(3 * 120.0.pow(4), Park.rideIncome(s, Catalog.ride("ferris_wheel")), eps)
         assertEquals(1.0, Park.rideIncome(s, Catalog.ride("snack_stand")), eps)
     }
 
     @Test
     fun `suggested upgrade is the cheapest one`() {
         assertEquals("snack_stand", Park.suggestedUpgrade(state())?.id)
-        val maxed = state(levels = mapOf("snack_stand" to 100))
+        val maxed = state(levels = mapOf("snack_stand" to 200))
         assertEquals("carousel", Park.suggestedUpgrade(maxed)?.id)
     }
 
@@ -233,7 +234,7 @@ class ParkTest {
     fun `rain closes the coaster and fills the carousel`() {
         val rainy = firstDay(Weather.RAINY) * Rules.DAY_MS + Rules.HOUR_MS
         val s = state(levels = mapOf("carousel" to 1, "roller_coaster" to 1), collectedAt = rainy, fixedAt = mapOf("carousel" to rainy, "roller_coaster" to rainy))
-        assertEquals(20.0 * 1.5, Park.incomeAt(s, rainy), eps)
+        assertEquals(120.0 * 1.5, Park.incomeAt(s, rainy), eps)
     }
 
     @Test
@@ -292,7 +293,7 @@ class ParkTest {
 
     @Test
     fun `building a ride starts its breakdown clock`() {
-        val s = ok(Park.upgrade(state(coins = 600_000.0, owned = emptySet()), "carousel", t0))
+        val s = ok(Park.upgrade(state(coins = 30_000.0, owned = emptySet()), "carousel", t0))
         assertEquals(t0, s.lastFixedAt["carousel"])
         assertTrue(!Park.isBroken(s, "carousel", t0))
     }

@@ -134,7 +134,7 @@ private fun ParkTab(state: ParkState, now: Long, message: String?, actions: Park
                 RideCard(state, ride, now, pending, onUpgrade = { actions.upgrade(ride.id) }, onFix = { actions.fix(ride.id) })
             }
             item {
-                BigButton("Claim daily visit · +10 gems", Palette.Card, Palette.Ink, Modifier.fillMaxWidth(), onClick = actions.claimDaily)
+                BigButton("Claim daily visit · +${Rules.DAILY_VISIT_GEMS} gems", Palette.Card, Palette.Ink, Modifier.fillMaxWidth(), onClick = actions.claimDaily)
             }
         }
     }
@@ -224,7 +224,7 @@ private fun MilestoneProgress(level: Int, maxLevel: Int) {
             Box(modifier = Modifier.fillMaxWidth(fraction.coerceIn(0f, 1f)).fillMaxHeight().background(Palette.ParkGreen))
         }
         Text(
-            if (next == milestone) "×${Rules.MILESTONE_FACTOR.toInt()} income at Lv $next" else "Top level at Lv $next",
+            if (next == milestone) "×${formatFactor(Rules.MILESTONE_FACTOR)} income at Lv $next" else "Top level at Lv $next",
             color = Palette.InkMuted,
             fontSize = 12.sp,
         )
@@ -262,8 +262,8 @@ private fun ShopTab(state: ParkState, message: String?, actions: ParkActions) {
         }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                EarnTile("Daily visit", "+10", Modifier.weight(1f))
-                EarnTile("Ride Lv 25, 50…", "+25", Modifier.weight(1f))
+                EarnTile("Daily visit", "+${Rules.DAILY_VISIT_GEMS}", Modifier.weight(1f))
+                EarnTile("Every 25 ride levels", "+${Rules.MILESTONE_GEMS}", Modifier.weight(1f))
             }
         }
     }
