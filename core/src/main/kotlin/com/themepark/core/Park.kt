@@ -126,4 +126,14 @@ object Park {
         Catalog.rides
             .filter { !it.shopOnly || state.level(it.id) > 0 }
             .minByOrNull { upgradeCost(it, state.level(it.id)) }
+
+    /**
+     * Rides in the order the park screen lists them: the next ride to build on top, then the
+     * built rides, newest first. Rides after the next one stay hidden until it is built.
+     */
+    fun displayOrder(state: ParkState): List<RideDef> {
+        val next = Catalog.rides.firstOrNull { !it.shopOnly && state.level(it.id) == 0 }
+        val built = Catalog.rides.filter { state.level(it.id) > 0 }.reversed()
+        return listOfNotNull(next) + built
+    }
 }

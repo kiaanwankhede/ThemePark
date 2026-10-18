@@ -22,7 +22,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -39,6 +47,7 @@ import com.themepark.core.Park
 import com.themepark.core.ParkState
 import com.themepark.core.RideDef
 import com.themepark.core.ShopItem
+import kotlinx.coroutines.delay
 
 enum class Tab { Park, Shop }
 
@@ -110,7 +119,7 @@ private fun ParkTab(state: ParkState, now: Long, message: String?, actions: Park
                 }
             }
             message?.let { item { MessageLine(it) } }
-            items(Catalog.rides.filter { !it.shopOnly || state.level(it.id) > 0 }, key = { it.id }) { ride ->
+            items(Park.displayOrder(state), key = { it.id }) { ride ->
                 RideCard(state, ride, pending, onUpgrade = { actions.upgrade(ride.id) })
             }
             item {
@@ -147,9 +156,9 @@ private fun RideCard(state: ParkState, ride: RideDef, pending: Double, onUpgrade
                 NewLookProgress(level, next)
             }
             if (!ride.shopOnly) {
-                BigButton(
+                HoldToRepeatButton(
                     "${if (level == 0) "Build" else "Upgrade"} · ${formatAmount(cost)}",
-                    Palette.Blue, Palette.OnDark, Modifier.fillMaxWidth(), enabled = affordable, onClick = onUpgrade,
+                    Modifier.fillMaxWidth(), enabled = affordable, onAction = onUpgrade,
                 )
             }
         }
@@ -270,6 +279,53 @@ private fun BigButton(
         colors = ButtonDefaults.buttonColors(
             containerColor = container,
             contentColor = content,
+            disabledContainerColor = Palette.Track,
+            disabledContentColor = Palette.InkMuted,
+        ),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+    ) {
+        Text(text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+    }
+}
+
+/**
+ * A tap upgrades once; holding keeps upgrading, a little faster the longer it is held, until
+ * the finger lifts or the next upgrade is unaffordable.
+ */
+@Composable
+private fun HoldToRepeatButton(text: String, modifier: Modifier, enabled: Boolean, onAction: () -> Unit) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val latestAction by rememberUpdatedState(onAction)
+    val latestEnabled by rememberUpdatedState(enabled)
+    // Set once holding has started repeating, so the release does not count as one more tap.
+    var repeated by remember { mutableStateOf(false) }
+
+    LaunchedEffect(pressed) {
+        if (!pressed) return@LaunchedEffect
+        repeated = false
+        delay(400)
+        var interval = 200L
+        while (latestEnabled) {
+            repeated = true
+            latestAction()
+            delay(interval)
+            interval = maxOf(60L, interval * 85 / 100)
+        }
+    }
+
+    Button(
+        onClick = {
+            if (!repeated) onAction()
+            repeated = false
+        },
+        enabled = enabled,
+        interactionSource = interaction,
+        modifier = modifier.heightIn(min = 48.dp),
+        shape = RoundedCornerShape(14.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = Palette.Blue,
+            contentColor = Palette.OnDark,
             disabledContainerColor = Palette.Track,
             disabledContentColor = Palette.InkMuted,
         ),

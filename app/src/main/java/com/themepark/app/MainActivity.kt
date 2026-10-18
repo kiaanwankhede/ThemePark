@@ -21,6 +21,7 @@ import com.themepark.app.widget.refreshParkWidgets
 import com.themepark.core.Outcome
 import com.themepark.core.Park
 import com.themepark.core.ParkState
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -43,6 +44,7 @@ private fun Game() {
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var message by remember { mutableStateOf<String?>(null) }
     var tab by remember { mutableStateOf(Tab.Park) }
+    var widgetRefresh by remember { mutableStateOf<Job?>(null) }
 
     // The widget may have changed the save while the game was in the background.
     LifecycleResumeEffect(Unit) {
@@ -60,7 +62,12 @@ private fun Game() {
         val outcome = store.act { action(it, System.currentTimeMillis()) }
         if (outcome is Outcome.Ok) state = outcome.state
         message = outcome.message()
-        scope.launch { refreshParkWidgets(context) }
+        // Holding an upgrade button fires many actions a second; redraw the widget once they settle.
+        widgetRefresh?.cancel()
+        widgetRefresh = scope.launch {
+            delay(500)
+            refreshParkWidgets(context)
+        }
     }
 
     ParkApp(

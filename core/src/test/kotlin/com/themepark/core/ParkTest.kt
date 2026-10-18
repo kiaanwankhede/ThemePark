@@ -178,6 +178,25 @@ class ParkTest {
     }
 
     @Test
+    fun `display order puts the next ride first, then built rides newest first`() {
+        assertEquals(listOf("carousel", "snack_stand"), Park.displayOrder(state()).map { it.id })
+        val three = state(levels = mapOf("snack_stand" to 3, "carousel" to 2, "ferris_wheel" to 1))
+        assertEquals(listOf("roller_coaster", "ferris_wheel", "carousel", "snack_stand"), Park.displayOrder(three).map { it.id })
+    }
+
+    @Test
+    fun `display order with everything built has no next ride and shows the golden coaster first`() {
+        val all = Catalog.rides.associate { it.id to 1 }
+        assertEquals(Catalog.rides.reversed().map { it.id }, Park.displayOrder(state(levels = all)).map { it.id })
+    }
+
+    @Test
+    fun `display order never offers the shop-only ride as the next to build`() {
+        val buildable = Catalog.rides.filter { !it.shopOnly }.associate { it.id to 1 }
+        assertTrue(Park.displayOrder(state(levels = buildable)).none { it.shopOnly })
+    }
+
+    @Test
     fun `save file round-trips`() {
         val s = state(coins = 12.5, gems = 7, boostUntil = t0 + 5, owned = setOf("fountain"))
         assertEquals(s, SaveCodec.decode(SaveCodec.encode(s)))
