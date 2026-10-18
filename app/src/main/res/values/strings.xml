@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Theme Park</string>
+    <string name="widget_description">Collect earnings and upgrade rides from your home screen</string>
+</resources>

@@ -17,8 +17,7 @@ upgrade rides without opening the game.
 | Module | What it is | Status |
 |---|---|---|
 | `core/` | Pure-Kotlin game rules: economy, offline earnings, upgrades, boost, gem shop, save file. Shared by the app and the widget so both always agree. | Done, unit tested |
-| `app/` | Android app (Jetpack Compose): park screen, upgrades, shop | Not started |
-| `widget/` | Home-screen widget (Jetpack Glance): collect + suggested upgrade | Not started |
+| `app/` | Android app (Jetpack Compose): park screen with collect, boost, daily gems, ride upgrades and the gem shop; plus the home-screen widget (Jetpack Glance) with Collect and the cheapest upgrade | First version, built by CI |
 
 Every rule in `core` is a pure function of `(state, now)`, with no clock or I/O inside, which
 is what lets the widget apply an action to the save file while the game is closed.
@@ -26,7 +25,8 @@ is what lets the widget apply an action to the save file while the game is close
 ## Build and test
 
 ```
-./gradlew :core:test
+./gradlew :core:test :app:assembleDebug
 ```
 
-Requires JDK 17 or newer.
+Requires JDK 17 and the Android SDK (Android Studio installs it). Every push is built by
+GitHub Actions, which uploads `app-debug.apk` as a downloadable artifact on the run's page.
