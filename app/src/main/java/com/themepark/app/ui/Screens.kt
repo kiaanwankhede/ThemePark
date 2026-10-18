@@ -53,23 +53,34 @@ import kotlinx.coroutines.delay
 
 enum class Tab { Park, Shop }
 
+/** How many levels an upgrade button buys: one, ten, or as many as the coins on hand allow. */
+enum class BuyMode(val label: String) { One("×1"), Ten("×10"), Max("Max") }
+
 /** Callbacks from the screens; MainActivity applies them to the save file. */
 class ParkActions(
-    val collect: () -> Unit,
     val boost: () -> Unit,
     val claimDaily: () -> Unit,
-    val upgrade: (rideId: String) -> Unit,
+    val upgrade: (rideId: String, count: Int) -> Unit,
     val fix: (rideId: String) -> Unit,
     val fixAll: () -> Unit,
     val buy: (itemId: String) -> Unit,
 )
 
 @Composable
-fun ParkApp(state: ParkState, now: Long, message: String?, tab: Tab, onTab: (Tab) -> Unit, actions: ParkActions) {
+fun ParkApp(
+    state: ParkState,
+    now: Long,
+    message: String?,
+    tab: Tab,
+    onTab: (Tab) -> Unit,
+    buyMode: BuyMode,
+    onBuyMode: (BuyMode) -> Unit,
+    actions: ParkActions,
+) {
     Column(modifier = Modifier.fillMaxSize().background(Palette.Card)) {
         Box(modifier = Modifier.weight(1f)) {
             when (tab) {
-                Tab.Park -> ParkTab(state, now, message, actions)
+                Tab.Park -> ParkTab(state, now, message, buyMode, onBuyMode, actions)
                 Tab.Shop -> ShopTab(state, message, actions)
             }
         }
@@ -80,8 +91,10 @@ fun ParkApp(state: ParkState, now: Long, message: String?, tab: Tab, onTab: (Tab
 // ---------- Park ----------
 
 @Composable
-private fun ParkTab(state: ParkState, now: Long, message: String?, actions: ParkActions) {
+private fun ParkTab(state: ParkState, now: Long, message: String?, buyMode: BuyMode, onBuyMode: (BuyMode) -> Unit, actions: ParkActions) {
+    // While the game is open, earnings are collected for the player, so the balance includes them.
     val pending = Park.pending(state, now)
+    val boostLeft = state.boostUntil - now
     Column(modifier = Modifier.fillMaxSize().background(Palette.Grass)) {
         Column(
             modifier = Modifier.fillMaxWidth().background(Palette.ParkGreen).statusBarsPadding().padding(16.dp),
@@ -91,7 +104,7 @@ private fun ParkTab(state: ParkState, now: Long, message: String?, actions: Park
                 Column(modifier = Modifier.weight(1f)) {
                     Text("Sunny Hills Park", color = Palette.OnDark, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                     Text(
-                        if (now < state.boostUntil) "2× boost running" else "Earnings stop 8h after you collect",
+                        if (boostLeft > 0) "2× boost · ${formatDuration(boostLeft)} left" else "Away earnings stop after 8h",
                         color = Palette.OnDarkMuted,
                         fontSize = 13.sp,
                     )
@@ -99,7 +112,7 @@ private fun ParkTab(state: ParkState, now: Long, message: String?, actions: Park
                 Pill("MEMBER · NO ADS", Palette.Purple)
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Chip(formatAmount(state.coins), Modifier.weight(1f)) { CoinIcon() }
+                Chip(formatAmount(state.coins + pending), Modifier.weight(1f)) { CoinIcon() }
                 Chip("${state.gems}", Modifier.weight(1f)) { GemIcon() }
                 Chip("+${formatAmount(Park.incomeAt(state, now))}/s", Modifier.weight(1f)) { RateIcon() }
             }
@@ -111,16 +124,12 @@ private fun ParkTab(state: ParkState, now: Long, message: String?, actions: Park
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    BigButton(
-                        if (pending >= 1) "Collect ${formatAmount(pending)}" else "Earning…",
-                        Palette.Gold, Palette.Ink, Modifier.weight(1f), enabled = pending >= 1, onClick = actions.collect,
-                    )
-                    BigButton(
-                        if (now < state.boostUntil) "Extend 2×" else "2× Income · Free",
-                        Palette.Card, Palette.Ink, Modifier.weight(1f), onClick = actions.boost,
-                    )
-                }
+                BigButton(
+                    if (boostLeft > 0) "Extend 2× boost · ${formatDuration(boostLeft)} left" else "2× Income for 4h · Free",
+                    Palette.Gold, Palette.Ink, Modifier.fillMaxWidth(),
+                    enabled = boostLeft < Rules.BOOST_MAX_STACK_MS,
+                    onClick = actions.boost,
+                )
             }
             item { WeatherCard(now) }
             val broken = Park.brokenRides(state, now)
@@ -130,8 +139,9 @@ private fun ParkTab(state: ParkState, now: Long, message: String?, actions: Park
                 }
             }
             message?.let { item { MessageLine(it) } }
+            item { BuyModeRow(buyMode, onBuyMode) }
             items(Park.displayOrder(state), key = { it.id }) { ride ->
-                RideCard(state, ride, now, pending, onUpgrade = { actions.upgrade(ride.id) }, onFix = { actions.fix(ride.id) })
+                RideCard(state, ride, now, pending, buyMode, onUpgrade = { count -> actions.upgrade(ride.id, count) }, onFix = { actions.fix(ride.id) })
             }
             item {
                 BigButton("Claim daily visit · +${Rules.DAILY_VISIT_GEMS} gems", Palette.Card, Palette.Ink, Modifier.fillMaxWidth(), onClick = actions.claimDaily)
@@ -156,15 +166,31 @@ private fun WeatherCard(now: Long) {
 }
 
 @Composable
-private fun RideCard(state: ParkState, ride: RideDef, now: Long, pending: Double, onUpgrade: () -> Unit, onFix: () -> Unit) {
+private fun RideCard(
+    state: ParkState,
+    ride: RideDef,
+    now: Long,
+    pending: Double,
+    buyMode: BuyMode,
+    onUpgrade: (count: Int) -> Unit,
+    onFix: () -> Unit,
+) {
     val level = state.level(ride.id)
     val broken = Park.isBroken(state, ride.id, now)
     val maxed = Park.isMaxed(state, ride)
     val weather = Weather.at(now)
     val factor = weather.factor(ride.id)
-    val cost = Park.upgradeCost(ride, level)
     // Upgrading collects first, so pending coins count toward the cost.
-    val affordable = state.coins + pending >= cost
+    val coins = state.coins + pending
+    val remaining = ride.maxLevel - level
+    val count = when (buyMode) {
+        BuyMode.One -> 1
+        BuyMode.Ten -> minOf(10, remaining)
+        BuyMode.Max -> maxOf(1, Park.affordableLevels(ride, level, coins))
+    }
+    val cost = Park.upgradeCost(ride, level, count)
+    val affordable = coins >= cost
+    val income = Park.rideIncome(state, ride) * Park.globalMultiplier(state)
     Row(
         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Palette.Card).padding(12.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -180,8 +206,8 @@ private fun RideCard(state: ParkState, ride: RideDef, now: Long, pending: Double
             Text(
                 when {
                     level == 0 -> "Not built yet · top level ${ride.maxLevel}"
-                    maxed -> "Lv ${ride.maxLevel} MAX · +${formatAmount(Park.rideIncome(state, ride))}/s"
-                    else -> "Lv $level/${ride.maxLevel} · +${formatAmount(Park.rideIncome(state, ride))}/s"
+                    maxed -> "Lv ${ride.maxLevel} MAX · +${formatAmount(income)}/s"
+                    else -> "Lv $level/${ride.maxLevel} · +${formatAmount(income)}/s"
                 },
                 color = Palette.InkMuted,
                 fontSize = 13.sp,
@@ -199,9 +225,10 @@ private fun RideCard(state: ParkState, ride: RideDef, now: Long, pending: Double
             }
             if (level > 0 && !maxed) MilestoneProgress(level, ride.maxLevel)
             if (!maxed && !(ride.shopOnly && level == 0)) {
+                val verb = if (level == 0) "Build" else "Upgrade"
                 HoldToRepeatButton(
-                    "${if (level == 0) "Build" else "Upgrade"} · ${formatAmount(cost)}",
-                    Modifier.fillMaxWidth(), enabled = affordable, onAction = onUpgrade,
+                    if (count == 1) "$verb · ${formatAmount(cost)}" else "$verb ×$count · ${formatAmount(cost)}",
+                    Modifier.fillMaxWidth(), enabled = affordable, onAction = { onUpgrade(count) },
                 )
             }
         }
@@ -211,7 +238,39 @@ private fun RideCard(state: ParkState, ride: RideDef, now: Long, pending: Double
 private fun formatFactor(factor: Double): String =
     if (factor == factor.toLong().toDouble()) factor.toLong().toString() else factor.toString()
 
-/** Progress towards the next ×5 milestone (every 25 levels), or the top level if that comes first. */
+/** 3h 12m, 45m, or "under a minute". */
+private fun formatDuration(ms: Long): String {
+    val minutes = ms / 60_000
+    return when {
+        minutes >= 60 -> "${minutes / 60}h ${minutes % 60}m"
+        minutes >= 1 -> "${minutes}m"
+        else -> "under a minute"
+    }
+}
+
+/** Picks how many levels each upgrade button buys. */
+@Composable
+private fun BuyModeRow(mode: BuyMode, onMode: (BuyMode) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Palette.Card).padding(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("Buy", color = Palette.InkMuted, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 8.dp))
+        for (m in BuyMode.entries) {
+            val selected = m == mode
+            BigButton(
+                m.label,
+                if (selected) Palette.Blue else Palette.Card,
+                if (selected) Palette.OnDark else Palette.Ink,
+                Modifier.weight(1f),
+                onClick = { onMode(m) },
+            )
+        }
+    }
+}
+
+/** Progress towards the next milestone (every 25 levels), or the top level if that comes first. */
 @Composable
 private fun MilestoneProgress(level: Int, maxLevel: Int) {
     val every = Rules.MILESTONE_EVERY

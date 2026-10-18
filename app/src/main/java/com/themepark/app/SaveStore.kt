@@ -24,7 +24,14 @@ class SaveStore private constructor(private val file: AtomicFile) {
 
     private fun read(): ParkState {
         if (!file.baseFile.exists()) return ParkState.newGame(System.currentTimeMillis()).also(::write)
-        return SaveCodec.decode(file.readFully().decodeToString())
+        return try {
+            SaveCodec.decode(file.readFully().decodeToString())
+        } catch (e: Exception) {
+            // An unreadable save would otherwise crash the game and the widget on every start.
+            // Keep it aside for inspection and start a new park.
+            file.baseFile.renameTo(File(file.baseFile.parentFile, "park-unreadable-${System.currentTimeMillis()}.json"))
+            ParkState.newGame(System.currentTimeMillis()).also(::write)
+        }
     }
 
     private fun write(state: ParkState) {

@@ -39,7 +39,7 @@ import com.themepark.core.ParkState
 import com.themepark.core.Weather
 
 /**
- * Home-screen widget: collect earnings and buy the cheapest upgrade without opening the game.
+ * Home-screen widget: collect earnings and spend them on upgrades without opening the game.
  * Tapping anywhere else opens the game.
  */
 class ParkWidget : GlanceAppWidget() {
@@ -72,10 +72,9 @@ class ParkWidgetReceiver : GlanceAppWidgetReceiver() {
 @Composable
 private fun WidgetContent(state: ParkState, now: Long) {
     val pending = Park.pending(state, now)
-    val suggested = Park.suggestedUpgrade(state)
-    val cost = suggested?.let { Park.upgradeCost(it, state.level(it.id)) }
-    // Upgrading collects first, so pending coins count toward the cost.
-    val canUpgrade = cost != null && state.coins + pending >= cost
+    // One tap spends the coins on hand (pending ones included) on the best-value upgrades.
+    val levels = Park.spendableLevels(state, now)
+    val next = Park.suggestedUpgrade(state)
 
     Column(
         modifier = GlanceModifier
@@ -104,11 +103,15 @@ private fun WidgetContent(state: ParkState, now: Long) {
                 enabled = pending >= 1,
             )
             Spacer(modifier = GlanceModifier.width(8.dp))
-            if (suggested != null && cost != null) {
+            if (levels > 0) {
                 Button(
-                    text = "${suggested.name} Lv ${state.level(suggested.id) + 1} · ${formatAmount(cost)}",
+                    text = "Upgrade ×$levels",
                     onClick = actionRunCallback<UpgradeAction>(),
-                    enabled = canUpgrade,
+                )
+            } else if (next != null) {
+                Text(
+                    "Next: ${next.name} · ${formatAmount(Park.upgradeCost(next, state.level(next.id)))}",
+                    style = TextStyle(fontSize = 12.sp),
                 )
             }
         }
@@ -129,12 +132,13 @@ class FixAllAction : ActionCallback {
     }
 }
 
+/**
+ * Spends the coins on the best-value upgrades. Kept under its old name: widgets already on a
+ * home screen point at this class until they next redraw.
+ */
 class UpgradeAction : ActionCallback {
     override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
-        SaveStore.get(context).act { state ->
-            val ride = Park.suggestedUpgrade(state) ?: return@act Outcome.Refused("Nothing to upgrade")
-            Park.upgrade(state, ride.id, System.currentTimeMillis())
-        }
+        SaveStore.get(context).act { Park.spend(it, System.currentTimeMillis()) }
         refreshParkWidget(context, glanceId)
     }
 }

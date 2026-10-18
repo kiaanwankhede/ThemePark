@@ -299,6 +299,72 @@ class ParkTest {
     }
 
     @Test
+    fun `buying several levels costs the same as buying them one by one`() {
+        val ride = Catalog.ride("carousel")
+        val oneByOne = (7 until 17).sumOf { Park.upgradeCost(ride, it) }
+        assertEquals(oneByOne, Park.upgradeCost(ride, 7, 10), oneByOne * 1e-12)
+        assertEquals(0.0, Park.upgradeCost(ride, 7, 0), eps)
+    }
+
+    @Test
+    fun `affordable levels stops exactly at the coins and the top level`() {
+        val ride = Catalog.ride("snack_stand")
+        val exactlyTen = Park.upgradeCost(ride, 3, 10)
+        assertEquals(10, Park.affordableLevels(ride, 3, exactlyTen))
+        assertEquals(9, Park.affordableLevels(ride, 3, exactlyTen * (1 - 1e-9)))
+        assertEquals(0, Park.affordableLevels(ride, 3, Park.upgradeCost(ride, 3) / 2))
+        assertEquals(4, Park.affordableLevels(ride, 3, exactlyTen, limit = 4))
+        assertEquals(2, Park.affordableLevels(ride, 198, 1e300))
+    }
+
+    @Test
+    fun `buying ten levels at once pays the sum and awards every milestone crossed`() {
+        val levels = mapOf("snack_stand" to 20)
+        val cost = Park.upgradeCost(Catalog.ride("snack_stand"), 20, 40)
+        val s = ok(Park.upgrade(state(coins = cost, levels = levels), "snack_stand", 40, t0))
+        assertEquals(60, s.level("snack_stand"))
+        assertEquals(0.0, s.coins, cost * 1e-12)
+        // Lv 25 and Lv 50.
+        assertEquals(2 * Rules.MILESTONE_GEMS, s.gems)
+    }
+
+    @Test
+    fun `buying many levels is all or nothing and stops at the top level`() {
+        val short = Park.upgrade(state(coins = 200.0), "snack_stand", 10, t0)
+        assertIs<Outcome.NotEnoughCoins>(short)
+        val nearTop = ok(Park.upgrade(state(coins = 1e300, levels = mapOf("snack_stand" to 195)), "snack_stand", 50, t0))
+        assertEquals(200, nearTop.level("snack_stand"))
+    }
+
+    @Test
+    fun `best value prefers the bigger income gain per coin and respects the budget`() {
+        val s = state(levels = mapOf("snack_stand" to 1))
+        // Building the Carousel adds 120/s for 30,000; a Snack Stand level adds 1/s for about 103.
+        assertEquals("snack_stand", Park.bestValueUpgrade(s)?.id)
+        assertEquals(null, Park.bestValueUpgrade(s, budget = 50.0))
+    }
+
+    @Test
+    fun `spend buys upgrades until the coins run out`() {
+        val s = state(coins = 5_000.0)
+        val spent = ok(Park.spend(s, t0))
+        assertTrue(spent.level("snack_stand") > 1)
+        val cheapest = Park.suggestedUpgrade(spent)!!
+        assertTrue(spent.coins < Park.upgradeCost(cheapest, spent.level(cheapest.id)), "nothing affordable is left unbought")
+        assertEquals(spent.level("snack_stand") - 1, Park.spendableLevels(s, t0))
+        assertIs<Outcome.Refused>(Park.spend(state(coins = 0.0), t0))
+        assertEquals(5, Park.spendableLevels(s, t0, limit = 5))
+    }
+
+    @Test
+    fun `double income applies to the whole park`() {
+        val s = state(levels = mapOf("snack_stand" to 1, "carousel" to 1), owned = setOf("mechanic", "double_income"))
+        assertEquals(2.0, Park.globalMultiplier(s), eps)
+        assertEquals(2 * 121.0, Park.baseIncome(s), eps)
+        assertEquals(2 * 121.0, Park.incomeAt(s, t0), eps)
+    }
+
+    @Test
     fun `big numbers use idle-game names`() {
         assertEquals("950", Numbers.format(950.0))
         assertEquals("12.4K", Numbers.format(12_400.0))

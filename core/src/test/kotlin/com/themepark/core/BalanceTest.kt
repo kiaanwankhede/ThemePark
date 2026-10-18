@@ -22,7 +22,7 @@ class BalanceTest {
         var incomeSeconds = 0.0
 
         while (true) {
-            val ride = bestValue(s) ?: break
+            val ride = Park.bestValueUpgrade(s) ?: break
             val cost = Park.upgradeCost(ride, s.level(ride.id))
             val seconds = cost / Park.baseIncome(s)
             payback += seconds
@@ -50,15 +50,4 @@ class BalanceTest {
         assertTrue(unlockedAtHours.size == 12 && unlockedAtHours[5] < 1.0, "the first six rides open within an hour")
     }
 
-    /** The upgrade adding the most income per coin among built rides and the next ride. */
-    private fun bestValue(s: ParkState): RideDef? {
-        val next = Park.displayOrder(s).firstOrNull { s.level(it.id) == 0 }
-        return Catalog.rides
-            .filter { !it.shopOnly && !Park.isMaxed(s, it) && (s.level(it.id) > 0 || it == next) }
-            .maxByOrNull { ride ->
-                val level = s.level(ride.id)
-                val gain = Park.rideIncome(s.copy(rideLevels = s.rideLevels + (ride.id to level + 1)), ride) - Park.rideIncome(s, ride)
-                gain / Park.upgradeCost(ride, level)
-            }
-    }
 }

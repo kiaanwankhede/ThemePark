@@ -13,6 +13,9 @@ upgrade rides without opening the game.
   upgrade costs about a second of income at the start, tens of seconds mid-game and minutes near
   the end; income ×2.5 every 25 levels and prices climb into the aa, ab… ranges
   (`core/src/test/.../BalanceTest.kt` buys every level with the real rules to check this).
+- **Quick to play.** Coins tick up live while the game is open (earnings are banked for you),
+  each ride buys ×1, ×10 or Max levels at a time, holding a button keeps buying, and the widget's
+  one Upgrade button spends your coins on the best-value upgrades.
 - **Less addictive by design.** Earnings stop 8 hours after your last collect, so a few
   check-ins a day is the natural rhythm, and most of them can happen from the widget.
 
