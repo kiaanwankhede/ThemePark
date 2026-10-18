@@ -29,9 +29,6 @@ fun artTier(level: Int): Int = when {
     else -> 4
 }
 
-/** Level at which the picture next changes, or null at the top tier. */
-fun nextArtLevel(level: Int): Int? = listOf(1, 10, 25, 50).firstOrNull { it > level }
-
 /** A still picture of a ride that gains detail with each tier. No animation, on purpose. */
 @Composable
 fun RideArt(rideId: String, tier: Int, modifier: Modifier = Modifier) {
@@ -40,9 +37,17 @@ fun RideArt(rideId: String, tier: Int, modifier: Modifier = Modifier) {
         when (rideId) {
             "snack_stand" -> drawSnackStand(tier)
             "carousel" -> drawCarousel(tier)
+            "bumper_cars" -> drawBumperCars(tier)
+            "teacups" -> drawTeacups(tier)
             "ferris_wheel" -> drawFerrisWheel(tier)
-            "roller_coaster" -> drawCoaster(tier, gold = false)
-            "golden_coaster" -> drawCoaster(tier, gold = true)
+            "pirate_ship" -> drawPirateShip(tier)
+            "log_flume" -> drawLogFlume(tier)
+            "haunted_house" -> drawHauntedHouse(tier)
+            "drop_tower" -> drawDropTower(tier)
+            "roller_coaster" -> drawCoaster(tier, Palette.ParkGreen, Palette.Red)
+            "splash_zone" -> drawSplashZone(tier)
+            "mega_coaster" -> drawCoaster(tier, Palette.Purple, Palette.Sky, extraLoop = true)
+            "golden_coaster" -> drawCoaster(tier, Palette.GoldDark, Palette.Gold)
         }
         if (tier >= 3) drawBunting(tier)
     }
@@ -174,14 +179,14 @@ private fun DrawScope.drawFerrisWheel(tier: Int) {
     }
 }
 
-private fun DrawScope.drawCoaster(tier: Int, gold: Boolean) {
-    val trackColor = locked(tier, if (gold) Palette.GoldDark else Palette.ParkGreen)
-    val track = Path().apply {
+private fun DrawScope.drawCoaster(tier: Int, track: Color, car: Color, extraLoop: Boolean = false) {
+    val trackColor = locked(tier, track)
+    val trackPath = Path().apply {
         moveTo(size.width * 0.06f, size.height * 0.80f)
         cubicTo(size.width * 0.22f, size.height * 0.10f, size.width * 0.40f, size.height * 0.12f, size.width * 0.52f, size.height * 0.56f)
         cubicTo(size.width * 0.62f, size.height * 0.88f, size.width * 0.80f, size.height * 0.80f, size.width * 0.94f, size.height * 0.30f)
     }
-    drawPath(track, trackColor, style = if (tier == 0) outline(tier) else Stroke(width = u(0.045f), cap = StrokeCap.Round))
+    drawPath(trackPath, trackColor, style = if (tier == 0) outline(tier) else Stroke(width = u(0.045f), cap = StrokeCap.Round))
     if (tier == 0) return
     // Supports: more as it grows.
     val supports = listOf(0.20f to 0.38f, 0.50f to 0.52f, 0.80f to 0.62f, 0.32f to 0.24f, 0.90f to 0.40f, 0.64f to 0.80f)
@@ -189,13 +194,165 @@ private fun DrawScope.drawCoaster(tier: Int, gold: Boolean) {
         drawLine(Palette.Wood, p(x, top), p(x, 0.86f), strokeWidth = u(0.02f))
     }
     // Cars along the first hill: one per tier.
-    val carColor = if (gold) Palette.Gold else Palette.Red
+    val carColor = car
     val cars = listOf(0.12f to 0.56f, 0.17f to 0.40f, 0.23f to 0.28f, 0.30f to 0.22f)
     for ((x, y) in cars.take(tier)) {
         drawRoundRect(carColor, topLeft = p(x - 0.04f, y - 0.04f), size = Size(size.width * 0.08f, size.height * 0.07f), cornerRadius = CornerRadius(u(0.02f)))
     }
     if (tier >= 3) {
         drawCircle(trackColor, radius = u(0.11f), center = p(0.70f, 0.50f), style = Stroke(width = u(0.035f)))
+    }
+    if (extraLoop && tier >= 2) {
+        drawCircle(trackColor, radius = u(0.09f), center = p(0.38f, 0.58f), style = Stroke(width = u(0.03f)))
+    }
+}
+
+private fun DrawScope.drawBumperCars(tier: Int) {
+    drawRoundRect(
+        locked(tier, Palette.Wood),
+        topLeft = p(0.10f, 0.40f),
+        size = Size(size.width * 0.80f, size.height * 0.44f),
+        cornerRadius = CornerRadius(u(0.06f)),
+        style = outline(tier),
+    )
+    if (tier == 0) return
+    // Ceiling grid the cars draw power from.
+    drawLine(Palette.InkMuted, p(0.10f, 0.30f), p(0.90f, 0.30f), strokeWidth = u(0.012f))
+    drawLine(Palette.InkMuted, p(0.14f, 0.30f), p(0.14f, 0.40f), strokeWidth = u(0.015f))
+    drawLine(Palette.InkMuted, p(0.86f, 0.30f), p(0.86f, 0.40f), strokeWidth = u(0.015f))
+    val cars = listOf(0.18f to 0.52f, 0.52f to 0.66f, 0.62f to 0.46f, 0.30f to 0.68f, 0.72f to 0.62f)
+    val colors = listOf(Palette.Red, Palette.Sky, Palette.Gold, Palette.Purple, Palette.ParkGreen)
+    for ((i, xy) in cars.take(tier + 1).withIndex()) {
+        val (x, y) = xy
+        drawRoundRect(colors[i], topLeft = p(x, y), size = Size(size.width * 0.16f, size.height * 0.10f), cornerRadius = CornerRadius(u(0.03f)))
+        drawLine(Palette.InkMuted, p(x + 0.08f, y), p(x + 0.08f, 0.30f), strokeWidth = u(0.008f))
+    }
+}
+
+private fun DrawScope.drawTeacups(tier: Int) {
+    drawOval(locked(tier, Palette.Sky), topLeft = p(0.08f, 0.56f), size = Size(size.width * 0.84f, size.height * 0.28f), style = if (tier == 0) outline(tier) else Fill)
+    if (tier == 0) return
+    val cups = listOf(0.16f to 0.56f, 0.56f to 0.56f, 0.36f to 0.46f, 0.36f to 0.66f, 0.66f to 0.40f)
+    val colors = listOf(Palette.Red, Palette.Gold, Palette.Purple, Palette.Card, Palette.ParkGreen)
+    for ((i, xy) in cups.take(tier + 1).withIndex()) {
+        val (x, y) = xy
+        drawArc(colors[i], startAngle = 0f, sweepAngle = 180f, useCenter = true, topLeft = p(x, y - 0.10f), size = Size(size.width * 0.22f, size.height * 0.20f))
+        drawCircle(colors[i], radius = u(0.03f), center = p(x + 0.24f, y + 0.02f), style = Stroke(width = u(0.015f)))
+    }
+    if (tier >= 2) drawLine(Palette.GoldDark, p(0.5f, 0.70f), p(0.5f, 0.20f), strokeWidth = u(0.02f))
+    if (tier >= 2) drawCircle(Palette.Red, radius = u(0.06f), center = p(0.5f, 0.20f))
+}
+
+private fun DrawScope.drawPirateShip(tier: Int) {
+    val frame = locked(tier, Palette.Wood)
+    drawLine(frame, p(0.22f, 0.86f), p(0.5f, 0.14f), strokeWidth = u(0.035f), pathEffect = if (tier == 0) dashed else null)
+    drawLine(frame, p(0.78f, 0.86f), p(0.5f, 0.14f), strokeWidth = u(0.035f), pathEffect = if (tier == 0) dashed else null)
+    if (tier == 0) return
+    // Swing arm tilted to one side, holding the boat.
+    drawLine(Palette.InkMuted, p(0.5f, 0.14f), p(0.40f, 0.58f), strokeWidth = u(0.02f))
+    val hull = Path().apply {
+        moveTo(size.width * 0.12f, size.height * 0.56f)
+        lineTo(size.width * 0.70f, size.height * 0.56f)
+        lineTo(size.width * 0.60f, size.height * 0.72f)
+        lineTo(size.width * 0.22f, size.height * 0.72f)
+        close()
+    }
+    drawPath(hull, Palette.Red)
+    if (tier >= 2) {
+        drawLine(Palette.Wood, p(0.40f, 0.56f), p(0.40f, 0.32f), strokeWidth = u(0.02f))
+        val sail = Path().apply {
+            moveTo(size.width * 0.41f, size.height * 0.33f)
+            lineTo(size.width * 0.58f, size.height * 0.50f)
+            lineTo(size.width * 0.41f, size.height * 0.50f)
+            close()
+        }
+        drawPath(sail, Palette.Card)
+    }
+    if (tier >= 4) drawRect(Palette.Gold, topLeft = p(0.14f, 0.56f), size = Size(size.width * 0.56f, size.height * 0.03f))
+}
+
+private fun DrawScope.drawLogFlume(tier: Int) {
+    if (tier >= 3) {
+        val hill = Path().apply {
+            moveTo(size.width * 0.08f, size.height * 0.84f)
+            lineTo(size.width * 0.34f, size.height * 0.24f)
+            lineTo(size.width * 0.60f, size.height * 0.84f)
+            close()
+        }
+        drawPath(hill, Palette.ParkGreen)
+    }
+    val channel = Path().apply {
+        moveTo(size.width * 0.10f, size.height * 0.30f)
+        cubicTo(size.width * 0.40f, size.height * 0.30f, size.width * 0.50f, size.height * 0.80f, size.width * 0.90f, size.height * 0.78f)
+    }
+    drawPath(channel, locked(tier, Palette.Sky), style = if (tier == 0) outline(tier) else Stroke(width = u(0.07f), cap = StrokeCap.Round))
+    if (tier == 0) return
+    val logs = listOf(0.18f to 0.27f, 0.44f to 0.52f, 0.66f to 0.72f)
+    for ((x, y) in logs.take(tier.coerceAtMost(3))) {
+        drawRoundRect(Palette.Wood, topLeft = p(x, y - 0.04f), size = Size(size.width * 0.14f, size.height * 0.07f), cornerRadius = CornerRadius(u(0.03f)))
+    }
+    if (tier >= 2) {
+        drawCircle(Palette.SkyLight, radius = u(0.05f), center = p(0.84f, 0.70f))
+        drawCircle(Palette.SkyLight, radius = u(0.035f), center = p(0.92f, 0.66f))
+    }
+}
+
+private fun DrawScope.drawHauntedHouse(tier: Int) {
+    val body = locked(tier, Palette.PurpleDeep)
+    drawRect(body, topLeft = p(0.22f, 0.44f), size = Size(size.width * 0.56f, size.height * 0.40f), style = if (tier == 0) outline(tier) else Fill)
+    val roof = Path().apply {
+        moveTo(size.width * 0.16f, size.height * 0.44f)
+        lineTo(size.width * 0.50f, size.height * 0.18f)
+        lineTo(size.width * 0.84f, size.height * 0.44f)
+        close()
+    }
+    drawPath(roof, body, style = if (tier == 0) outline(tier) else Fill)
+    if (tier == 0) return
+    drawRoundRect(Palette.Wood, topLeft = p(0.44f, 0.66f), size = Size(size.width * 0.12f, size.height * 0.18f), cornerRadius = CornerRadius(u(0.02f)))
+    // Lit windows: more of the house glows as it grows.
+    val windows = listOf(0.28f to 0.52f, 0.62f to 0.52f, 0.28f to 0.68f, 0.62f to 0.68f, 0.45f to 0.32f)
+    for ((x, y) in windows.take(tier + 1)) {
+        drawRect(Palette.Gold, topLeft = p(x, y), size = Size(size.width * 0.10f, size.height * 0.08f))
+    }
+    if (tier >= 3) drawRect(body, topLeft = p(0.72f, 0.22f), size = Size(size.width * 0.10f, size.height * 0.24f))
+}
+
+private fun DrawScope.drawDropTower(tier: Int) {
+    val tower = locked(tier, Palette.InkMuted)
+    drawRect(tower, topLeft = p(0.45f, 0.10f), size = Size(size.width * 0.10f, size.height * 0.76f), style = if (tier == 0) outline(tier) else Fill)
+    if (tier == 0) return
+    drawRect(Palette.Red, topLeft = p(0.40f, 0.06f), size = Size(size.width * 0.20f, size.height * 0.06f))
+    // The seat ring sits higher on the tower as it grows.
+    val ringY = 0.70f - tier * 0.12f
+    drawRoundRect(Palette.Gold, topLeft = p(0.32f, ringY), size = Size(size.width * 0.36f, size.height * 0.08f), cornerRadius = CornerRadius(u(0.03f)))
+    if (tier >= 2) {
+        drawLine(Palette.InkMuted, p(0.30f, 0.86f), p(0.45f, 0.60f), strokeWidth = u(0.015f))
+        drawLine(Palette.InkMuted, p(0.70f, 0.86f), p(0.55f, 0.60f), strokeWidth = u(0.015f))
+    }
+    if (tier >= 4) for (i in 0 until 6) drawCircle(Palette.Gold, radius = u(0.012f), center = p(0.5f, 0.18f + i * 0.11f))
+}
+
+private fun DrawScope.drawSplashZone(tier: Int) {
+    drawRoundRect(
+        locked(tier, Palette.Sky),
+        topLeft = p(0.10f, 0.62f),
+        size = Size(size.width * 0.80f, size.height * 0.22f),
+        cornerRadius = CornerRadius(u(0.08f)),
+        style = if (tier == 0) outline(tier) else Fill,
+    )
+    if (tier == 0) return
+    drawRect(Palette.Wood, topLeft = p(0.12f, 0.20f), size = Size(size.width * 0.12f, size.height * 0.44f))
+    val slideColors = listOf(Palette.Red, Palette.Gold, Palette.Purple, Palette.ParkGreen)
+    for (i in 0 until tier.coerceAtMost(4)) {
+        val slide = Path().apply {
+            moveTo(size.width * 0.24f, size.height * (0.22f + i * 0.08f))
+            cubicTo(
+                size.width * (0.50f + i * 0.08f), size.height * (0.22f + i * 0.08f),
+                size.width * (0.40f + i * 0.08f), size.height * 0.60f,
+                size.width * (0.62f + i * 0.08f), size.height * 0.64f,
+            )
+        }
+        drawPath(slide, slideColors[i], style = Stroke(width = u(0.035f), cap = StrokeCap.Round))
     }
 }
 

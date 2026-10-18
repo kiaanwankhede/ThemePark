@@ -8,13 +8,24 @@ import kotlin.math.floor
  */
 enum class Weather(val label: String, val effect: String, private val factors: Map<String, Double>) {
     SUNNY("Sunny", "A normal busy day", emptyMap()),
-    HOT("Hot", "Snack Stand sells double", mapOf("snack_stand" to 2.0)),
+    HOT(
+        "Hot",
+        "Snacks and water rides earn double",
+        mapOf("snack_stand" to 2.0, "log_flume" to 2.0, "splash_zone" to 2.0),
+    ),
     RAINY(
         "Rainy",
-        "Coasters closed, Carousel busy, Ferris Wheel half",
-        mapOf("roller_coaster" to 0.0, "golden_coaster" to 0.0, "carousel" to 1.5, "ferris_wheel" to 0.5),
+        "Coasters and Drop Tower closed, indoor rides busy",
+        mapOf(
+            "roller_coaster" to 0.0, "mega_coaster" to 0.0, "golden_coaster" to 0.0, "drop_tower" to 0.0,
+            "carousel" to 1.5, "haunted_house" to 1.5, "ferris_wheel" to 0.5,
+        ),
     ),
-    WINDY("Windy", "Ferris Wheel closed", mapOf("ferris_wheel" to 0.0)),
+    WINDY(
+        "Windy",
+        "Ferris Wheel and Drop Tower closed",
+        mapOf("ferris_wheel" to 0.0, "drop_tower" to 0.0, "pirate_ship" to 0.5),
+    ),
     ;
 
     /** Income multiplier for a ride on a day with this weather; 0 means closed. */

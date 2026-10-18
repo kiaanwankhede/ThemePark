@@ -9,6 +9,10 @@ upgrade rides without opening the game.
   watching anything.
 - **Premium items cost gems you earn by playing** (daily visit, ride milestones), so there is
   still something to work toward.
+- **A park you can finish.** 12 rides (plus a gem-only Golden Coaster), each with a top level
+  between 100 and 250. Income ×5 every 25 levels; prices climb into the aa, ab… ranges. With
+  four check-ins a day a new ride opens every few days and the park is done in about 6–10 weeks
+  (`core/src/test/.../BalanceTest.kt` plays the real rules to check this).
 - **Less addictive by design.** Earnings stop 8 hours after your last collect, so a few
   check-ins a day is the natural rhythm, and most of them can happen from the widget.
 

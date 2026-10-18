@@ -46,6 +46,7 @@ import com.themepark.core.Catalog
 import com.themepark.core.Park
 import com.themepark.core.ParkState
 import com.themepark.core.RideDef
+import com.themepark.core.Rules
 import com.themepark.core.ShopItem
 import com.themepark.core.Weather
 import kotlinx.coroutines.delay
@@ -158,6 +159,7 @@ private fun WeatherCard(now: Long) {
 private fun RideCard(state: ParkState, ride: RideDef, now: Long, pending: Double, onUpgrade: () -> Unit, onFix: () -> Unit) {
     val level = state.level(ride.id)
     val broken = Park.isBroken(state, ride.id, now)
+    val maxed = Park.isMaxed(state, ride)
     val weather = Weather.at(now)
     val factor = weather.factor(ride.id)
     val cost = Park.upgradeCost(ride, level)
@@ -176,7 +178,11 @@ private fun RideCard(state: ParkState, ride: RideDef, now: Long, pending: Double
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(ride.name, color = Palette.Ink, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
             Text(
-                if (level == 0) "Not built yet" else "Lv $level · +${formatAmount(Park.rideIncome(state, ride))}/s",
+                when {
+                    level == 0 -> "Not built yet · top level ${ride.maxLevel}"
+                    maxed -> "Lv ${ride.maxLevel} MAX · +${formatAmount(Park.rideIncome(state, ride))}/s"
+                    else -> "Lv $level/${ride.maxLevel} · +${formatAmount(Park.rideIncome(state, ride))}/s"
+                },
                 color = Palette.InkMuted,
                 fontSize = 13.sp,
             )
@@ -191,10 +197,8 @@ private fun RideCard(state: ParkState, ride: RideDef, now: Long, pending: Double
             if (broken) {
                 BigButton("Fix", Palette.RedDark, Palette.OnDark, Modifier.fillMaxWidth(), onClick = onFix)
             }
-            nextArtLevel(level)?.takeIf { level > 0 }?.let { next ->
-                NewLookProgress(level, next)
-            }
-            if (!ride.shopOnly) {
+            if (level > 0 && !maxed) MilestoneProgress(level, ride.maxLevel)
+            if (!maxed && !(ride.shopOnly && level == 0)) {
                 HoldToRepeatButton(
                     "${if (level == 0) "Build" else "Upgrade"} · ${formatAmount(cost)}",
                     Modifier.fillMaxWidth(), enabled = affordable, onAction = onUpgrade,
@@ -207,16 +211,23 @@ private fun RideCard(state: ParkState, ride: RideDef, now: Long, pending: Double
 private fun formatFactor(factor: Double): String =
     if (factor == factor.toLong().toDouble()) factor.toLong().toString() else factor.toString()
 
-/** Progress towards the level where the ride's picture next changes. */
+/** Progress towards the next ×5 milestone (every 25 levels), or the top level if that comes first. */
 @Composable
-private fun NewLookProgress(level: Int, next: Int) {
-    val start = listOf(1, 10, 25, 50).last { it <= level }
+private fun MilestoneProgress(level: Int, maxLevel: Int) {
+    val every = Rules.MILESTONE_EVERY
+    val start = level / every * every
+    val milestone = start + every
+    val next = minOf(milestone, maxLevel)
     val fraction = (level - start).toFloat() / (next - start)
     Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
         Box(modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(50)).background(Palette.Track)) {
             Box(modifier = Modifier.fillMaxWidth(fraction.coerceIn(0f, 1f)).fillMaxHeight().background(Palette.ParkGreen))
         }
-        Text("New look at Lv $next", color = Palette.InkMuted, fontSize = 12.sp)
+        Text(
+            if (next == milestone) "×${Rules.MILESTONE_FACTOR.toInt()} income at Lv $next" else "Top level at Lv $next",
+            color = Palette.InkMuted,
+            fontSize = 12.sp,
+        )
     }
 }
 

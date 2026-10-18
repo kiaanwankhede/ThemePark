@@ -32,7 +32,7 @@ data class ParkState(
 
     companion object {
         fun newGame(now: Long): ParkState = ParkState(
-            coins = 20.0,
+            coins = 100_000.0,
             gems = 0,
             rideLevels = mapOf("snack_stand" to 1),
             lastCollectedAt = now,
@@ -49,10 +49,11 @@ object Rules {
     const val OFFLINE_CAP_MS = 8 * HOUR_MS
 
     /** Each upgrade costs this much more than the last. */
-    const val COST_GROWTH = 1.15
+    const val COST_GROWTH = 1.065
 
-    /** Every this many levels a ride's income doubles and the player earns [MILESTONE_GEMS]. */
+    /** Every this many levels a ride's income is multiplied by [MILESTONE_FACTOR] and the player earns [MILESTONE_GEMS]. */
     const val MILESTONE_EVERY = 25
+    const val MILESTONE_FACTOR = 5.0
     const val MILESTONE_GEMS = 25
 
     const val DAILY_VISIT_GEMS = 10

@@ -29,7 +29,7 @@ object Park {
         val level = state.level(ride.id)
         if (level <= 0) return 0.0
         val milestones = level / Rules.MILESTONE_EVERY
-        var income = ride.baseIncomePerSec * level * 2.0.pow(milestones)
+        var income = ride.baseIncomePerSec * level * Rules.MILESTONE_FACTOR.pow(milestones)
         for (id in state.ownedItems) {
             val effect = Catalog.shopItem(id).effect
             if (effect is ShopEffect.RideMultiplier && effect.rideId == ride.id) income *= effect.factor
@@ -116,6 +116,7 @@ object Park {
     fun upgrade(state: ParkState, rideId: String, now: Long): Outcome {
         val ride = Catalog.ride(rideId)
         if (ride.shopOnly && state.level(rideId) == 0) return Outcome.Refused("${ride.name} is unlocked in the shop")
+        if (state.level(rideId) >= ride.maxLevel) return Outcome.Refused("${ride.name} is at its top level")
         val settled = collect(state, now)
         val level = settled.level(rideId)
         val cost = upgradeCost(ride, level)
@@ -183,10 +184,12 @@ object Park {
         return Outcome.Ok(result)
     }
 
+    fun isMaxed(state: ParkState, ride: RideDef): Boolean = state.level(ride.id) >= ride.maxLevel
+
     /** The cheapest next upgrade, which is what the widget offers. Null if nothing can be upgraded. */
     fun suggestedUpgrade(state: ParkState): RideDef? =
-        Catalog.rides
-            .filter { !it.shopOnly || state.level(it.id) > 0 }
+        displayOrder(state)
+            .filter { !isMaxed(state, it) && !(it.shopOnly && state.level(it.id) == 0) }
             .minByOrNull { upgradeCost(it, state.level(it.id)) }
 
     /**
