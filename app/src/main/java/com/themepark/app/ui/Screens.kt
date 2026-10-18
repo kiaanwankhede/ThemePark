@@ -214,14 +214,18 @@ private fun RideCard(
             )
             if (level > 0) {
                 when {
-                    broken -> Text("Broken down · not earning", color = Palette.RedDark, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                    factor == 0.0 -> Text("Closed today (${weather.label})", color = Palette.RedDark, fontSize = 13.sp)
+                    factor == 0.0 -> Text(
+                        "Closed today (${weather.label})${if (broken) " · needs repair" else ""}",
+                        color = Palette.RedDark,
+                        fontSize = 13.sp,
+                    )
+                    broken -> Text("Needs repair · half speed", color = Palette.RedDark, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                     factor > 1.0 -> Text("Busy today · ×${formatFactor(factor)}", color = Palette.ParkGreen, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                     factor < 1.0 -> Text("Slow today · ×${formatFactor(factor)}", color = Palette.InkMuted, fontSize = 13.sp)
                 }
             }
             if (broken) {
-                BigButton("Fix", Palette.RedDark, Palette.OnDark, Modifier.fillMaxWidth(), onClick = onFix)
+                BigButton("Fix · back to full speed", Palette.RedDark, Palette.OnDark, Modifier.fillMaxWidth(), onClick = onFix)
             }
             if (level > 0 && !maxed) MilestoneProgress(level, ride.maxLevel)
             if (!maxed && !(ride.shopOnly && level == 0)) {

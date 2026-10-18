@@ -62,6 +62,9 @@ object Rules {
     const val BREAKDOWN_MIN_MS = 3 * HOUR_MS
     const val BREAKDOWN_SPREAD_MS = 3 * HOUR_MS
 
+    /** A broken ride keeps running at this share of its income until it is fixed. */
+    const val BROKEN_INCOME_FACTOR = 0.5
+
     /** Membership boost: no ad needed, but it still runs for a fixed time and stacks only so far. */
     const val BOOST_FACTOR = 2.0
     const val BOOST_DURATION_MS = 4 * HOUR_MS

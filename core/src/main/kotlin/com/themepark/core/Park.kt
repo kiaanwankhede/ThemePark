@@ -97,7 +97,8 @@ object Park {
     fun incomeAt(state: ParkState, time: Long): Double {
         val weather = Weather.at(time)
         val total = Catalog.rides.sumOf { ride ->
-            if (isBroken(state, ride.id, time)) 0.0 else rideIncome(state, ride) * weather.factor(ride.id)
+            val repair = if (isBroken(state, ride.id, time)) Rules.BROKEN_INCOME_FACTOR else 1.0
+            rideIncome(state, ride) * weather.factor(ride.id) * repair
         }
         return total * globalMultiplier(state) * if (time < state.boostUntil) Rules.BOOST_FACTOR else 1.0
     }

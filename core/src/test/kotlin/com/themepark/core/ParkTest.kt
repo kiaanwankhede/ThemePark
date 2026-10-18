@@ -248,14 +248,16 @@ class ParkTest {
     }
 
     @Test
-    fun `a ride breaks down between 3 and 6 hours after it was fixed and then earns nothing`() {
+    fun `a ride breaks down between 3 and 6 hours after it was fixed and then runs at half speed`() {
         val s = state(owned = emptySet())
         val breaksAt = Park.breaksAt(s, "snack_stand")!!
         assertTrue(breaksAt - t0 in Rules.BREAKDOWN_MIN_MS until Rules.BREAKDOWN_MIN_MS + Rules.BREAKDOWN_SPREAD_MS)
         assertTrue(!Park.isBroken(s, "snack_stand", breaksAt - 1))
         assertTrue(Park.isBroken(s, "snack_stand", breaksAt))
-        val earned = (breaksAt - t0) / 1000.0
-        assertEquals(earned, Park.pending(s, t0 + Rules.OFFLINE_CAP_MS), eps)
+        val end = t0 + Rules.OFFLINE_CAP_MS
+        val earned = (breaksAt - t0) / 1000.0 + Rules.BROKEN_INCOME_FACTOR * (end - breaksAt) / 1000.0
+        assertEquals(earned, Park.pending(s, end), eps)
+        assertEquals(Rules.BROKEN_INCOME_FACTOR, Park.incomeAt(s, breaksAt), eps)
     }
 
     @Test
@@ -264,7 +266,8 @@ class ParkTest {
         val later = Park.breaksAt(s, "snack_stand")!! + Rules.HOUR_MS
         assertIs<Outcome.Refused>(Park.fix(s, "snack_stand", t0))
         val fixed = ok(Park.fix(s, "snack_stand", later))
-        assertEquals((later - Rules.HOUR_MS - t0) / 1000.0, fixed.coins, eps)
+        // Full speed until the breakdown, then an hour at half speed.
+        assertEquals((later - Rules.HOUR_MS - t0) / 1000.0 + Rules.BROKEN_INCOME_FACTOR * 3_600, fixed.coins, eps)
         assertTrue(!Park.isBroken(fixed, "snack_stand", later))
         assertEquals(60.0, Park.pending(fixed, later + 60 * second), eps)
     }
