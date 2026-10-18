@@ -18,6 +18,17 @@ android {
         versionName = "0.1.0"
     }
 
+    // A fixed test key, so each CI build installs as an update over the last one instead of
+    // being refused for a signature mismatch. Test builds only: never use it for a store release.
+    signingConfigs {
+        getByName("debug") {
+            storeFile = rootProject.file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildFeatures { compose = true }
 
     compileOptions {
